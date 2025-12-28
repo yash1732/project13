@@ -10,7 +10,7 @@ genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 model= genai.GenerativeModel("gemini-flash-latest")
 
-def generate_incident_report(transcription, category, location, time):
+def generate_incident_json(transcription, category, location, time):
     """
     Sends all data to Gemini to write the final report.
     """
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     fake_loc = "Rudrapur, Highway 9"
     fake_time = "2025-10-12 21:00:00"
 
-    result = generate_incident_report(fake_transcription, fake_category, fake_loc, fake_time)
+    result = generate_incident_json(fake_transcription, fake_category, fake_loc, fake_time)
     
     if result:
         print("\n✅ JSON Generated Successfully:")
