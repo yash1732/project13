@@ -7,7 +7,7 @@ from typing import Optional, List
 from datetime import datetime
 from ..ml.route_model.inference import get_risk_prediction
 
-app = FastAPI(title="Route uvicorn backend.api.api_route:app --reloadRisk Scoring API", version="1.0.0")
+app = FastAPI(title="Route Risk Scoring API", version="1.0.0")
 
 class RouteRiskRequest(BaseModel):
     hour: int = Field(..., ge=0, le=23)

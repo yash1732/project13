@@ -66,7 +66,7 @@ class RiskPredictor:
         prediction = self.model.predict(features)[0]
         probabilities = self.model.predict_proba(features)[0]
         
-        risk_level = self.label_encoder.inverse_transform([prediction])[0]
+        risk_level = self.label_encoder.inverse_transform([prediction])[0] # type: ignore
         confidence = float(probabilities[prediction])
         explanation = self.generate_explanation(hour, weather, road_type, speed_limit)
         
