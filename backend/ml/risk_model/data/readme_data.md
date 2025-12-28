@@ -8,14 +8,26 @@ This dataset does not represent any true conditions for any region in India.It i
 >As per the project vision, we prioritize Transparency > Perfect Accuracy. Because real-time accident data for gig workers is often siloed within platforms like Swiggy or Zomato , we utilize a Simulated/Synthetic Data Strategy. This allows us to build a functional MVP that demonstrates "Responsible AI" without legal or privacy risks.
 
 
-## Features
+## 📊 The Data (Training Data)
 
-| Column Name | Description|
-| ------------- |:-------------:|
-| Hour of Day      | Integer (0-23)	, High risk during night shifts (22:00 - 05:00).     |
-| Road Type      | Categorical , Highways are weighted higher than residential streets    |
-| Weather      | Categorical	, Rain or extreme heat adds a risk multiplier     |
-|Speed Limit|Integer	, Higher speeds correlate with higher incident severity|
+### We Use: **Synthetic (Artificial) Data**
+
+**Why synthetic?**
+- Real accident data is hard to get
+- Kaggle datasets are incomplete
+- Synthetic data is realistic enough for demo/hackathon
+
+### What Our Data Looks Like:
+
+**10,000 samples** with these patterns:
+
+| Feature | Distribution | Example Values |
+|---------|-------------|----------------|
+| 🕐 **Hour** | 24 hours | 0, 8, 14, 18, 23 |
+| 📅 **Day** | 7 days, more weekday accidents | Monday, Friday, Saturday |
+| 🌤️ **Weather** | 65% fine, 20% cloudy, 12% rainy, 3% foggy | Fine, Rainy, Foggy |
+| 🛣️ **Road Type** | 40% single lane, 30% dual lane | Single carriageway, Roundabout |
+| 🚗 **Speed Limit** | 30-80 kmph | 30, 40, 50, 60, 80 |
 
 ## Risk Label Classification (Target)
 
