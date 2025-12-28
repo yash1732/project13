@@ -91,7 +91,7 @@ def train_model():
         print(f"  {feature:20s}: {importance:.4f}")
     
     os.makedirs('artifacts', exist_ok=True)
-    joblib.dump(model, 'artifacts/risk_model.pkl')
+    joblib.dump(model, 'artifacts/route_model.pkl')
     joblib.dump(label_encoder, 'artifacts/label_encoder.pkl')
     
     print("\n Model saved to artifacts/")

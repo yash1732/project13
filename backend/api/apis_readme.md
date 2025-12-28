@@ -22,8 +22,7 @@ Output JSON:
   },
   "risk_score": number
 }
-
-
+---
 ### Route risk api
 
 Endpoint : POST /api/risk/route
