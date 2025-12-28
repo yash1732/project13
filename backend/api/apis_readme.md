@@ -22,3 +22,27 @@ Output JSON:
   },
   "risk_score": number
 }
+
+
+### Route risk api
+
+Endpoint : POST /api/risk/route
+
+Input JSON:
+{
+  "hour": number,              // Required: Hour of day (0-23)
+  "day_of_week": string,       // Required: Day name
+  "weather": string,           // Required: Weather condition
+  "road_type": string,         // Required: Type of road
+  "speed_limit": number        // Optional: Speed limit in kmph (default: 50)
+}
+
+> can refer risk_model/data/readme.md for more info.
+
+Output JSON:
+{
+  "risk_level": string,        // "Low" | "Medium" | "High"
+  "confidence": number,        // 0.0 to 1.0
+  "explanation": string,       // Human-readable explanation
+  "timestamp": string          // ISO 8601 timestamp
+}
