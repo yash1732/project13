@@ -12,7 +12,7 @@ class WorkloadInput(BaseModel):
     weather_stress_index: float
     self_reported_tiredness: int
 
-@app.post("/predict/fatigue")
+@app.post("/api/risk/fatigue")
 def predict(input_data: WorkloadInput):
     result = predict_workload_risk(input_data.dict())
     return result

@@ -1,6 +1,6 @@
 ### Workload Risk API
 
-Endpoint: POST /predict/fatigue
+Endpoint: POST /api/risk/fatigue
 
 Input JSON:
 {

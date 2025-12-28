@@ -5,16 +5,16 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, validator
 from typing import Optional, List
 from datetime import datetime
-from inference import get_risk_prediction
+from ..ml.route_model.inference import get_risk_prediction
 
-app = FastAPI(title="Risk Scoring API", version="1.0.0")
+app = FastAPI(title="Route uvicorn backend.api.api_route:app --reloadRisk Scoring API", version="1.0.0")
 
 class RouteRiskRequest(BaseModel):
     hour: int = Field(..., ge=0, le=23)
     day_of_week: str
     weather: str
     road_type: str
-    speed_limit: Optional[int] = 50
+    speed_limit: int = 50
     
     @validator('day_of_week')
     def validate_day(cls, v):
@@ -25,7 +25,7 @@ class RouteRiskRequest(BaseModel):
     
     @validator('weather')
     def validate_weather(cls, v):
-        valid = ['Fine', 'Cloudy', 'Rainy', 'Foggy']
+        valid = ['Fine', 'Cloudy', 'Rainy','Foggy']
         if v not in valid:
             raise ValueError(f'Must be one of: {", ".join(valid)}')
         return v
@@ -38,7 +38,7 @@ class RouteRiskResponse(BaseModel):
 
 @app.get("/")
 async def root():
-    return {"status": "online", "service": "Risk Scoring API"}
+    return {"status": "ok"}
 
 @app.post("/api/risk/route", response_model=RouteRiskResponse)
 async def predict_route_risk(request: RouteRiskRequest):
@@ -56,4 +56,3 @@ async def predict_route_risk(request: RouteRiskRequest):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
