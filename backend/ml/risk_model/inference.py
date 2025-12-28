@@ -80,4 +80,3 @@ def get_risk_prediction(hour, day_of_week, weather, road_type, speed_limit=50):
     """Helper function"""
     return predictor.predict(hour, day_of_week, weather, road_type, speed_limit)
 
-print("✅ Created inference.py")
