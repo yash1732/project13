@@ -3,6 +3,8 @@ import joblib
 import pandas as pd
 import os
 
+root=os.path.dirname(__file__)
+
 class RiskPredictor:
     def __init__(self):
         self.model = None
@@ -11,9 +13,9 @@ class RiskPredictor:
     
     def load_model(self):
         """Load trained model"""
-        if os.path.exists('artifacts/risk_model.pkl'):
-            self.model = joblib.load('artifacts/risk_model.pkl')
-            self.label_encoder = joblib.load('artifacts/label_encoder.pkl')
+        if os.path.exists(os.path.join(root,'artifacts/route_model.pkl')):
+            self.model = joblib.load(os.path.join(root,'artifacts/route_model.pkl'))
+            self.label_encoder = joblib.load(os.path.join(root,'artifacts/label_encoder.pkl'))
             print("✅ Model loaded")
         else:
             print("⚠️  Model not found")
