@@ -18,7 +18,7 @@ def create_training_data(n_samples=10000):
     weather = np.random.choice(['Fine', 'Cloudy', 'Rainy', 'Foggy'], 
                                n_samples, p=[0.65, 0.20, 0.12, 0.03])
     road_types = np.random.choice(['Single carriageway', 'Dual carriageway', 
-                                   'One way street', 'Roundabout','Rural road'], n_samples)
+                                   'One way street', 'Roundabout'], n_samples)
     speed_limits = np.random.choice([30, 40, 50, 60, 80], n_samples)
     
     df = pd.DataFrame({
@@ -40,7 +40,7 @@ def engineer_features(df):
     df['weather_risk'] = df['weather'].map(weather_map)
     
     road_map = {'Dual carriageway': 1, 'One way street': 1, 
-                'Single carriageway': 2, 'Roundabout': 2,'Rural road':3}
+                'Single carriageway': 2, 'Roundabout': 2}
     df['road_risk'] = df['road_type'].map(road_map)
     
     df['speed_risk'] = (df['speed_limit'] > 40).astype(int) + (df['speed_limit'] > 60).astype(int)
