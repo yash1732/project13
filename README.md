@@ -6,6 +6,11 @@ This project is built as a **hackathon MVP**, prioritizing clarity, responsibili
 
 ---
 
+### Intial UI Plan
+<img width="1768" height="608" alt="ui_plan" src="https://github.com/user-attachments/assets/db743159-5691-4f00-b53a-a560e703c97e" />
+
+---
+
 ##  Problem Context
 
 Delivery gig workers (food, grocery, courier) face daily risks such as:
