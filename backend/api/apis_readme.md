@@ -36,7 +36,7 @@ Input JSON:
   "speed_limit": number        // Optional: Speed limit in kmph (default: 50)
 }
 
-> can refer risk_model/data/readme.md for more info.
+> can refer route_model/data/readme.md for more info.
 
 Output JSON:
 {

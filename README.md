@@ -1,8 +1,13 @@
 # Gig Worker Safety & Support Platform
 
-A safety-first web platform designed to help delivery gig workers **anticipate risks, respond during emergencies, and protect themselves after incidents** — using explainable AI and practical system design.
+A safety-first web platform designed to help delivery gig workers **anticipate risks, respond during emergencies, and protect themselves after incidents**  using explainable AI and practical system design.
 
-This project is built as a **hackathon MVP**, prioritizing clarity, responsibility, and real-world feasibility over unnecessary complexity.
+Built as a hackathon MVP for TechSprint 2026, by Team Fauxfly.
+
+---
+
+### Intial UI Plan
+<img width="1768" height="608" alt="ui_plan" src="https://github.com/user-attachments/assets/db743159-5691-4f00-b53a-a560e703c97e" />
 
 ---
 
@@ -34,85 +39,76 @@ The system is designed to **assist workers**, not monitor or control them.
 ##  High-Level Architecture
 
 - **Frontend**: Web-based, mobile-first UI (maps, forms, SOS)
-- **Backend**: API orchestration and data handling
+- **Backend**: API orchestration and authentication (firebase)
 - **ML Services**: Explainable risk & fatigue indicators
-- **AI Services**: Incident report generation (non-decisional)
+- **AI Services**: Incident report generation (Gemini)
 - **External Services**: Maps, geolocation, nearby emergency support
 
 Detailed system flow is documented in `docs/system_flow.md`.
 
 ---
 
-##  ML Services (Explainable & Responsible)
+## ML Part
 
-### 1) Fatigue & Workload Risk Model
+All ML components are implemented as part of a unified, explainable backend and exposed via REST APIs.
 
-This repository includes a complete, explainable ML service that estimates **relative workload risk** for gig workers.
+### 1) Fatigue & Workload Risk Analysis
 
 **Inputs**
 - Shift duration
 - Consecutive work days
 - Night work fraction
-- Weather stress index
+- Weather stress
 - Self-reported tiredness
 
-**Model**
-- Multinomial Logistic Regression
-- Min–max feature scaling
-- L2 regularization
-- Fully interpretable coefficients
+**Model & Output**
+- Multinomial Logistic Regression (interpretable)
+- Outputs: `Low / Medium / High` risk, probabilities, and a risk score
+- Trained on clearly disclosed **synthetic workload scenarios**
 
-**Outputs**
-- Risk class: `Low / Medium / High`
-- Risk probabilities
-- Risk score = probability of `High` risk
-
-The model is trained on **synthetic workload scenarios**, clearly disclosed, and is intended for **preventive insight**, not diagnosis.
+---
 
 ### 2) Route / Area Risk Analysis
+Provides **pre-ride safety insights** by estimating relative risk levels for selected routes or areas.
+
+- Uses contextual features such as time of day, route characteristics, and area signals
+- Outputs a simple **risk level (Low / Medium / High)** for easy decision-making
+- Designed for **prevention**, not navigation or enforcement
+
+---
+
 ### 3) Incident Analysis & Report Generation
+Supports **post-incident protection** through structured incident documentation.
 
----
-
-##  ML APIs
-
-1) The workload risk model is exposed via a lightweight REST API for frontend integration.
-
-- **Endpoint**: `POST /predict`
-- **Input**: JSON workload features
-- **Output**: Risk class, probabilities, and risk score
-
-See:
-`backend/api/fatigue_api.py`
-`backend/api/api_readme.md`
-
-2.
-3.
+- Takes basic incident details (type, description, time, location)
+- Generates a **clean, structured incident summary/report**
+- Intended for documentation and future reference, not legal judgment
 
 
 ---
 
-##  Repository Structure
+## ML APIs
 
-- backend/ → API layer (ML exposed to frontend)
-- ml/ → Model training, inference, evaluation
-- docs/ → System flow, ethics, impact
-- frontend/ → Web UI (integration layer)
+All machine learning functionalities are exposed through a **single FastAPI-based REST service**, designed for easy frontend integration.
+
+The API handles:
+- **Workload / fatigue risk prediction**
+- **Route or area risk scoring**
+- **Related ML-based safety insights**
+
+### API Overview
+- **Framework**: FastAPI (REST API)
+- **Input**: JSON-based feature data from frontend
+- **Output**: Risk level, confidence/probabilities, and computed risk score
+
+### POST endpoints
+-
 
 
-Supporting documentation:
-- `docs/system_flow.md`
-- `docs/impact_and_ethics.md`
+Refer `backend/api/api_readme.md`
 
 ---
 
-##  Responsible AI & Ethics
-
-- Models are explainable and transparent
-- Synthetic / proxy data usage is disclosed
-- No medical, legal, or employment decisions are made
-- ML outputs are advisory, not authoritative
-- No continuous tracking or personal health data stored
 
 > **Ethical Disclosure:**  
 > This platform uses explainable AI models trained on synthetic and proxy data to provide preventive safety insights. It is not intended for medical, legal, or employment decision-making.

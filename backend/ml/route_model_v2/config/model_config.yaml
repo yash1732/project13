@@ -1,0 +1,56 @@
+# Route Risk Model Configuration
+# Used for training, evaluation, and inference consistency
+
+model:
+  name: route_risk_logistic_regression
+  type: logistic_regression
+  multi_class: multinomial
+  max_iter: 1000
+  class_weight: balanced
+  random_state: 42
+
+features:
+  numeric:
+    - route_distance_km
+    - route_duration_min
+    - intersection_density
+    - weather_stress_index
+    - fatigue_score
+    - shift_duration_hours
+  binary:
+    - is_night
+
+preprocessing:
+  normalize_continuous: true
+  clip_ranges:
+    route_distance_km: [0.5, 40]
+    route_duration_min: [3, 180]
+    intersection_density: [0.05, 5.0]
+    fatigue_score: [1, 5]
+    shift_duration_hours: [1, 16]
+    weather_stress_index: [0, 1]
+
+labels:
+  target_column: route_risk_label
+  classes:
+    - Low
+    - Medium
+    - High
+
+data:
+  base_dataset: data/raw/route_risk_synthetic_base.csv
+  training_dataset: data/processed/route_risk_expanded_10k.csv
+
+evaluation:
+  test_split: 0.2
+  metrics:
+    - accuracy
+    - precision
+    - recall
+    - f1_score
+
+notes:
+  philosophy: >
+    This model estimates relative route risk using explainable proxy features.
+    It does not predict accidents or medical outcomes.
+    Safety and interpretability are prioritized over real-time precision.
