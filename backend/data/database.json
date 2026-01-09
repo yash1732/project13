@@ -1,0 +1,22 @@
+[
+    {
+        "user_id": "user_2",
+        "id": "inc_1767968337",
+        "title": "Incident Report",
+        "description": "No description available",
+        "severity": "medium",
+        "category": "Accident",
+        "timestamp": "2025-12-29 10:45:00",
+        "download_link": "/data/user_2/inc_1767968337.docx"
+    },
+    {
+        "user_id": "user_1",
+        "id": "inc_1767968161",
+        "title": "Incident Report",
+        "description": "No description available",
+        "severity": "medium",
+        "category": "Accident",
+        "timestamp": "2025-12-29 10:45:00",
+        "download_link": "/data/user_1/inc_1767968161.docx"
+    }
+]

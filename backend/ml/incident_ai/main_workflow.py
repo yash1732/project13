@@ -58,7 +58,24 @@ def run_gigguard_pipeline(user_id, audio_path, system_gps, system_time):
         time=system_time
     )
 
-    # Inject the AI metadata (Title, Severity) into the data packet so storage.py can use it for the DB
+    # --- DATA SANITIZATION (Fixing missing keys for Storage) ---
+    
+    # 1. Ensure 'category' exists at the top level (Storage needs this)
+    if 'category' not in incident_data:
+        incident_data['category'] = category_label
+
+    # 2. Ensure 'time' exists at the top level
+    if 'time' not in incident_data:
+        incident_data['time'] = system_time
+
+    # 3. Ensure 'meta' and 'report_id' exist (Critical for filenames)
+    if 'meta' not in incident_data:
+        incident_data['meta'] = {}
+        
+    if 'report_id' not in incident_data['meta']:
+        incident_data['meta']['report_id'] = f"inc_{int(time.time())}"
+
+    # 4. Inject AI Metadata (Title/Severity/Summary) if available
     if ai_title: incident_data['title'] = ai_title
     if ai_severity: incident_data['severity'] = ai_severity
     if ai_summary: incident_data['summary'] = ai_summary
@@ -83,7 +100,7 @@ def run_gigguard_pipeline(user_id, audio_path, system_gps, system_time):
 # --- TEST RUN ---
 if __name__ == "__main__":
     # Mock Inputs
-    test_user = "user_1" # <--- Simulating a specific user
+    test_user = "user_2" # <--- Simulating a specific user
     test_gps = "28.97, 79.41"
     test_time = "2025-12-29 10:45:00"
     
