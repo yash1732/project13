@@ -2,14 +2,14 @@ import sys
 import os
 from pathlib import Path
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
+from fastapi.staticfiles import StaticFiles  # <--- CRITICAL IMPORT
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 # ==========================================
 # 1. PATH SETUP
 # ==========================================
-# Ensure Python can find your ML modules (Incident AI, SOS, Route Risk)
+# We ensure Python can find all your ML modules
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(BASE_DIR / "backend" / "ml" / "route_risk"))
 sys.path.append(str(BASE_DIR / "backend" / "ml" / "SOS"))
@@ -21,10 +21,9 @@ sys.path.append(str(BASE_DIR / "backend" / "ml" / "incident_ai"))
 from backend.app.services.risk_service import risk_service
 from backend.app.services.fatigue_service import fatigue_service
 from backend.app.routers import ml_api
-# Import the new Incident Router (Make sure you created this file!)
-from backend.app.routers import incident_api 
+from backend.app.routers import incident_api  # <--- Ensure this is imported
 
-# Import SOS App
+# Import SOS App (Safe Import)
 try:
     from backend.ml.SOS.sos_api import app as sos_app
 except ImportError as e:
@@ -32,12 +31,13 @@ except ImportError as e:
     sos_app = None
 
 # ==========================================
-# 3. LIFESPAN (MODEL LOADING)
+# 3. LIFESPAN (Startup Logic)
 # ==========================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("\n🚀 STARTING UNIFIED SAFETY SERVER...")
     try:
+        print("   -> Loading Route Risk Model...")
         print("   -> Loading Fatigue Model...")
         fatigue_service.load_model()
         print("✅ Core ML Models Loaded!")
@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
 # ==========================================
 # 4. MAIN APP SETUP
 # ==========================================
-app = FastAPI(title="Project 13 Safety API (Unified)", lifespan=lifespan)
+app = FastAPI(title="Gig Worker Safety Platform", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -60,20 +60,19 @@ app.add_middleware(
 )
 
 # ==========================================
-# 5. REGISTER ROUTES (THE FIX)
+# 5. REGISTER ROUTES
 # ==========================================
 
-# A. Merge SOS Routes (Using include_router avoids shadowing)
+# A. SOS Service
 if sos_app:
-    # This adds /api/sos/trigger to our main app safely
     app.include_router(sos_app.router, tags=["SOS Service"])
 
-# B. Include other ML Routers
+# B. ML Services
 app.include_router(ml_api.router, tags=["Risk & Fatigue"])
 app.include_router(incident_api.router, tags=["Incident AI"])
 
-# C. Serve Generated Reports (Static Files)
-# Access at: http://localhost:8000/data/user_id/filename.docx
+# C. Serve Generated Reports (CRITICAL FOR DOWNLOADS)
+# This lets the frontend access: http://localhost:8000/data/user_123/report.docx
 data_dir = os.path.join(str(BASE_DIR), "backend", "data")
 os.makedirs(data_dir, exist_ok=True)
 app.mount("/data", StaticFiles(directory=data_dir), name="data")
@@ -86,7 +85,5 @@ def health_check():
     return {
         "status": "active", 
         "system": "Unified Backend", 
-        "available_modules": ["SOS", "Route Risk", "Fatigue", "Incident AI"]
+        "modules": ["SOS", "Route Risk", "Fatigue", "Incident AI"]
     }
-
-# vicorn backend.app.main:app --reload

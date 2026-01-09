@@ -4,17 +4,31 @@ from dotenv import load_dotenv
 from datetime import datetime
 import json
 
-
 load_dotenv()
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+api_key = os.getenv("GOOGLE_API_KEY")
 
-model= genai.GenerativeModel("gemini-flash-latest")
+# --- FIX: Only configure if key exists ---
+if api_key:
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-flash-latest")
+else:
+    model = None  # Placeholder
 
 def generate_incident_json(transcription, category, location, time):
+    if not model:
+        print("❌ Error: AI Model not loaded (Missing API Key).")
+        return {
+            "meta": {"report_type": "Error", "generated_at": time},
+            "classification": {"primary_category": category, "severity_level": "Medium"},
+            "narrative": {"objective_summary": transcription, "chronological_timeline": []},
+            "entities": {},
+            "location_context": {"system_recorded_gps": location}
+        }
+
     """
     Sends all data to Gemini to write the final report.
     """
-
+    # ... rest of your code ...
     prompt = f"""
         You are the "GigGuard" Incident Documentation AI.
         Your sole purpose is to create a neutral, structured archive of an incident based on user testimony.

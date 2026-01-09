@@ -6,13 +6,23 @@ from dotenv import load_dotenv
 load_dotenv()
 api_key = os.getenv("GOOGLE_API_KEY")
 
+# --- FIX: Don't kill the server if key is missing ---
 if not api_key:
-    print("❌ Error: GOOGLE_API_KEY not found in .env file")
-    exit()
-
-genai.configure(api_key=api_key)
+    print("⚠️ Warning: GOOGLE_API_KEY not found. AI features will fail, but Server is ON.")
+else:
+    genai.configure(api_key=api_key)
 
 def process_incident_audio(audio_path):
+    # Safety check inside the function too
+    if not api_key:
+        return {
+            "transcription": "System Error: No Google API Key configured.",
+            "category": "Other",
+            "title": "Configuration Error",
+            "severity": "low",
+            "summary": "Please set up your API key."
+        }
+        
     """
     Sends audio to Gemini 1.5 Flash to get Transcription, Classification, and UI Metadata.
     """

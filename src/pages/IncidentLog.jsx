@@ -1,531 +1,474 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { 
-  ArrowLeft, 
-  Plus, 
-  Clock, 
-  MapPin, 
-  AlertTriangle,
-  AlertCircle,
-  FileText,
-  Calendar,
-  CheckCircle,
-  XCircle,
-  Clock as ClockIcon,
-  ChevronRight
+  ArrowLeft, Mic, Square, Send, Loader2,
+  AlertTriangle, AlertCircle, FileText, MapPin, 
+  Calendar, ChevronRight, Shield, X, Plus
 } from 'lucide-react';
 import { collection, addDoc, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 
+// --- CONFIGURATION ---
+const API_URL = 'http://localhost:8000/api/incident/report';
+
 const incidentTypes = [
-  { id: 'accident', label: 'Accident', icon: <AlertTriangle className="h-5 w-5 text-red-500" /> },
-  { id: 'harassment', label: 'Harassment', icon: <AlertCircle className="h-5 w-5 text-orange-500" /> },
-  { id: 'theft', label: 'Theft', icon: <FileText className="h-5 w-5 text-yellow-500" /> },
-  { id: 'near_miss', label: 'Near Miss', icon: <ClockIcon className="h-5 w-5 text-blue-500" /> },
-  { id: 'road_condition', label: 'Road Condition', icon: <MapPin className="h-5 w-5 text-purple-500" /> },
-  { id: 'other', label: 'Other', icon: <AlertCircle className="h-5 w-5 text-gray-500" /> },
+  { id: 'accident', label: 'Accident', icon: AlertTriangle, color: 'text-red-500', bg: 'bg-red-50' },
+  { id: 'harassment', label: 'Harassment', icon: AlertCircle, color: 'text-orange-500', bg: 'bg-orange-50' },
+  { id: 'theft', label: 'Theft', icon: FileText, color: 'text-yellow-500', bg: 'bg-yellow-50' },
+  { id: 'other', label: 'Other', icon: Shield, color: 'text-gray-500', bg: 'bg-gray-50' },
 ];
 
 function IncidentLog() {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  const [isLoading, setIsLoading] = useState(false);
-  const [showForm, setShowForm] = useState(false);
+  
+  // State
+  const [activeTab, setActiveTab] = useState('list'); // 'list', 'voice', 'manual'
   const [incidents, setIncidents] = useState([]);
+  const [loading, setLoading] = useState(false);
+  
+  // Audio State
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const mediaRecorderRef = useRef(null);
+  const timerRef = useRef(null);
+
+  // Manual Form State
   const [formData, setFormData] = useState({
-    type: '',
+    type: 'accident',
     description: '',
-    date: new Date().toISOString().split('T')[0],
-    time: new Date().toTimeString().substring(0, 5),
     location: '',
     anonymous: false
   });
-  const [currentLocation, setCurrentLocation] = useState(null);
-  const [locationLoading, setLocationLoading] = useState(false);
 
-  // Fetch incidents from Firestore
+  // --- 1. FETCH INCIDENTS (Real-time) ---
   useEffect(() => {
     if (!currentUser) return;
     
+    // Listen to Firestore. When Python Backend pushes data, this updates INSTANTLY.
     const q = query(
       collection(db, 'incidents'),
       where('userId', '==', currentUser.uid),
       orderBy('timestamp', 'desc')
     );
     
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const incidentsList = [];
-      querySnapshot.forEach((doc) => {
-        incidentsList.push({ id: doc.id, ...doc.data() });
-      });
-      setIncidents(incidentsList);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setIncidents(list);
     });
     
     return () => unsubscribe();
   }, [currentUser]);
 
-  // Get current location
-  const getCurrentLocation = () => {
-    setLocationLoading(true);
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          setCurrentLocation({ lat: latitude, lng: longitude });
-          
-          // In a real app, you would reverse geocode the coordinates to get an address
-          setFormData(prev => ({
-            ...prev,
-            location: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
-          }));
-          
-          setLocationLoading(false);
-          toast.success('Location captured');
-        },
-        (error) => {
-          console.error('Error getting location:', error);
-          toast.error('Could not get your location. Please enter it manually.');
-          setLocationLoading(false);
-        },
-        { enableHighAccuracy: true, timeout: 10000 }
-      );
-    } else {
-      toast.error('Geolocation is not supported by your browser');
-      setLocationLoading(false);
-    }
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!formData.type) {
-      toast.error('Please select an incident type');
-      return;
-    }
-    
-    if (!formData.description) {
-      toast.error('Please provide a description');
-      return;
-    }
-    
+  // --- 2. AUDIO RECORDING LOGIC ---
+  const startRecording = async () => {
     try {
-      setIsLoading(true);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
       
-      // In a real app, you would also save to Firestore
+      const chunks = [];
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+      
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/mp4' }); // or 'audio/webm'
+        setAudioBlob(blob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      
+      // Timer
+      setRecordingDuration(0);
+      timerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+      
+    } catch (err) {
+      console.error(err);
+      toast.error("Microphone access denied");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      clearInterval(timerRef.current);
+    }
+  };
+
+  const resetAudio = () => {
+    setAudioBlob(null);
+    setRecordingDuration(0);
+  };
+
+  // --- 3. SUBMIT: VOICE REPORT (To Python API) ---
+  const handleVoiceSubmit = async () => {
+    if (!audioBlob) return;
+    setLoading(true);
+
+    // Get simple location for metadata
+    let gpsString = "Unknown Location";
+    try {
+      const pos = await new Promise((resolve, reject) => 
+        navigator.geolocation.getCurrentPosition(resolve, reject, {timeout: 5000})
+      );
+      gpsString = `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`;
+    } catch (e) {
+      console.warn("GPS failed, sending without coords");
+    }
+
+    try {
+      // Prepare payload for Python Backend
+      const data = new FormData();
+      // Rename file to .m4a so backend handles it easily
+      const file = new File([audioBlob], "report.m4a", { type: "audio/mp4" });
+      
+      data.append('file', file);
+      data.append('user_id', currentUser.uid);
+      data.append('gps_coords', gpsString);
+      data.append('timestamp', new Date().toISOString().replace('T', ' ').split('.')[0]);
+
+      // Call your Python API
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        body: data, // No Content-Type header needed (browser sets it for FormData)
+      });
+
+      if (!response.ok) throw new Error("Server Error");
+
+      const result = await response.json();
+      
+      toast.success("Report Generated by AI!");
+      resetAudio();
+      setActiveTab('list'); // Go back to list to see the new entry
+      
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to upload audio. Try manual mode.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+// --- 4. SUBMIT: MANUAL REPORT (Hybrid: Python + Firebase) ---
+  const handleManualSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.description) return toast.error("Description required");
+    setLoading(true);
+
+    try {
+      // 1. Get Location
+      let locationStr = "Unknown";
+      try {
+        const pos = await new Promise((res, rej) => 
+          navigator.geolocation.getCurrentPosition(res, rej, {timeout: 3000})
+        );
+        locationStr = `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
+      } catch (e) { locationStr = "Location not captured"; }
+
+      const timestamp = new Date().toISOString().replace('T', ' ').split('.')[0];
+      const manualType = formData.type || 'accident';
+
+      // 2. Send to Python Backend (Updates database.json)
+      let aiReportUrl = "";
+      try {
+        const pyResponse = await fetch('http://localhost:8000/api/incident/manual', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: currentUser.uid,
+            type: manualType,
+            description: formData.description,
+            location: locationStr || formData.location,
+            timestamp: timestamp
+          })
+        });
+        
+        if (pyResponse.ok) {
+           const pyData = await pyResponse.json();
+           aiReportUrl = pyData.download_link; // Get the generated doc link
+           console.log("Python Backend Updated Successfully");
+        }
+      } catch (pyError) {
+        console.warn("Python Backend unavailable - running in Cloud-Only mode");
+      }
+
+      // 3. Send to Firebase (Updates UI List)
+      // We do this from frontend because Backend might not have the Service Key yet
       await addDoc(collection(db, 'incidents'), {
         userId: currentUser.uid,
-        type: formData.type,
+        type: manualType,
         description: formData.description,
-        date: formData.date,
-        time: formData.time,
-        location: formData.location,
+        location: locationStr || formData.location,
         anonymous: formData.anonymous,
         status: 'pending',
         timestamp: new Date(),
-        locationCoords: currentLocation
+        is_ai_generated: false,
+        severity: 'medium',
+        ai_report_url: aiReportUrl // Attach the link we just got from Python
       });
-      
-      toast.success('Incident reported successfully');
-      setShowForm(false);
-      setFormData({
-        type: '',
-        description: '',
-        date: new Date().toISOString().split('T')[0],
-        time: new Date().toTimeString().substring(0, 5),
-        location: '',
-        anonymous: false
-      });
+
+      toast.success("Incident logged successfully");
+      setFormData({ type: 'accident', description: '', location: '', anonymous: false });
+      setActiveTab('list');
+
     } catch (error) {
-      console.error('Error reporting incident:', error);
-      toast.error('Failed to report incident. Please try again.');
+      console.error(error);
+      toast.error("Submission failed");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'pending':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-            Pending
-          </span>
-        );
-      case 'in_progress':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-            In Progress
-          </span>
-        );
-      case 'resolved':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-            Resolved
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-            Unknown
-          </span>
-        );
-    }
-  };
-
-  const getTypeBadge = (type) => {
-    const incidentType = incidentTypes.find(t => t.id === type);
-    if (!incidentType) return null;
-    
-    return (
-      <div className="flex items-center">
-        {incidentType.icon}
-        <span className="ml-1 text-sm font-medium text-gray-700">{incidentType.label}</span>
-      </div>
-    );
+  // --- UI HELPERS ---
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <button
-                onClick={() => navigate(-1)}
-                className="mr-4 p-2 rounded-full hover:bg-gray-100"
-              >
-                <ArrowLeft className="h-5 w-5 text-gray-700" />
-              </button>
-              <h1 className="text-xl font-semibold text-gray-900">
-                {showForm ? 'Report Incident' : 'Incident Log'}
-              </h1>
-            </div>
-            {!showForm && (
-              <button
-                onClick={() => setShowForm(true)}
-                className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                New Report
-              </button>
-            )}
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* HEADER */}
+      <header className="bg-white shadow-sm sticky top-0 z-10">
+        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center">
+            <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-gray-100">
+              <ArrowLeft className="h-5 w-5 text-gray-700" />
+            </button>
+            <h1 className="text-xl font-bold text-gray-900 ml-2">Incident Log</h1>
           </div>
+          {activeTab === 'list' && (
+            <button 
+              onClick={() => setActiveTab('manual')}
+              className="text-sm font-medium text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-lg"
+            >
+              Manual Entry
+            </button>
+          )}
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-        {showForm ? (
-          <div className="bg-white shadow overflow-hidden rounded-lg p-6 mb-6">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Incident Details</h3>
-                
-                {/* Incident Type */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Type of Incident <span className="text-red-500">*</span>
-                  </label>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    {incidentTypes.map((type) => (
-                      <label
-                        key={type.id}
-                        className={`relative flex items-center p-3 rounded-lg border ${
-                          formData.type === type.id
-                            ? 'border-indigo-500 bg-indigo-50'
-                            : 'border-gray-300 bg-white hover:bg-gray-50'
-                        } cursor-pointer`}
-                      >
-                        <input
-                          type="radio"
-                          name="type"
-                          value={type.id}
-                          checked={formData.type === type.id}
-                          onChange={handleInputChange}
-                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                        />
-                        <div className="ml-3 flex items-center">
-                          {type.icon}
-                          <span className="ml-2 text-sm font-medium text-gray-900">
-                            {type.label}
-                          </span>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Description */}
-                <div className="mb-6">
-                  <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
-                    Description <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    id="description"
-                    name="description"
-                    rows={4}
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md p-3"
-                    placeholder="Please provide details about the incident..."
-                  />
-                </div>
-
-                {/* Date and Time */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-6">
-                  <div>
-                    <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">
-                      Date
-                    </label>
-                    <div className="relative rounded-md shadow-sm">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Calendar className="h-5 w-5 text-gray-400" />
-                      </div>
-                      <input
-                        type="date"
-                        name="date"
-                        id="date"
-                        value={formData.date}
-                        onChange={handleInputChange}
-                        className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md h-10"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-1">
-                      Time
-                    </label>
-                    <div className="relative rounded-md shadow-sm">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Clock className="h-5 w-5 text-gray-400" />
-                      </div>
-                      <input
-                        type="time"
-                        name="time"
-                        id="time"
-                        value={formData.time}
-                        onChange={handleInputChange}
-                        className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md h-10"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Location */}
-                <div className="mb-6">
-                  <div className="flex justify-between items-center mb-2">
-                    <label htmlFor="location" className="block text-sm font-medium text-gray-700">
-                      Location
-                    </label>
-                    <button
-                      type="button"
-                      onClick={getCurrentLocation}
-                      disabled={locationLoading}
-                      className="text-xs text-indigo-600 hover:text-indigo-500 flex items-center"
-                    >
-                      {locationLoading ? (
-                        'Getting location...'
-                      ) : (
-                        <>
-                          <MapPin className="h-3 w-3 mr-1" />
-                          Use current location
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    name="location"
-                    id="location"
-                    value={formData.location}
-                    onChange={handleInputChange}
-                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border h-10"
-                    placeholder="Enter location or address"
-                  />
-                </div>
-
-                {/* Anonymous Reporting */}
-                <div className="flex items-center mb-6">
-                  <input
-                    id="anonymous"
-                    name="anonymous"
-                    type="checkbox"
-                    checked={formData.anonymous}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="anonymous" className="ml-2 block text-sm text-gray-700">
-                    Report anonymously
-                  </label>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setShowForm(false)}
-                  className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                >
-                  {isLoading ? 'Submitting...' : 'Submit Report'}
-                </button>
-              </div>
-            </form>
-          </div>
-        ) : (
-          <>
-            {incidents.length === 0 ? (
-              <div className="text-center py-12 bg-white rounded-lg shadow">
-                <FileText className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No incidents reported</h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  Get started by reporting a new incident.
+      <main className="flex-1 max-w-3xl mx-auto w-full p-4">
+        
+        {/* --- VIEW 1: INCIDENT LIST --- */}
+        {activeTab === 'list' && (
+          <div className="space-y-4">
+            {/* HERO: Voice Report CTA */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-700 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+              <div className="relative z-10">
+                <h2 className="text-2xl font-bold mb-2">Report an Incident</h2>
+                <p className="text-indigo-100 mb-6 text-sm max-w-[80%]">
+                  Use AI Voice Reporting to instantly document accidents, harassment, or safety issues.
                 </p>
-                <div className="mt-6">
-                  <button
-                    type="button"
-                    onClick={() => setShowForm(true)}
-                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    <Plus className="-ml-1 mr-2 h-5 w-5" />
-                    New Incident
-                  </button>
-                </div>
+                <button
+                  onClick={() => setActiveTab('voice')}
+                  className="w-full bg-white text-indigo-700 font-bold py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                >
+                  <Mic className="h-5 w-5" />
+                  Tap to Record
+                </button>
+              </div>
+              {/* Decoration */}
+              <div className="absolute -right-6 -bottom-10 opacity-20">
+                <Mic className="h-40 w-40 text-white" />
+              </div>
+            </div>
+
+            {/* List */}
+            <h3 className="font-bold text-gray-700 mt-6">Recent Reports</h3>
+            {incidents.length === 0 ? (
+              <div className="text-center py-10 opacity-50">
+                <FileText className="h-12 w-12 mx-auto mb-2 text-gray-400" />
+                <p>No incidents logged yet.</p>
               </div>
             ) : (
-              <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                <ul className="divide-y divide-gray-200">
-                  {incidents.map((incident) => (
-                    <li key={incident.id}>
-                      <div className="block hover:bg-gray-50">
-                        <div className="px-4 py-4 sm:px-6">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              {getTypeBadge(incident.type)}
-                              <span className="ml-2 text-sm text-gray-500">
-                                {new Date(incident.timestamp?.toDate()).toLocaleDateString()}
-                              </span>
-                            </div>
-                            <div className="ml-2 flex-shrink-0 flex">
-                              {getStatusBadge(incident.status)}
-                            </div>
-                          </div>
-                          <div className="mt-2 sm:flex sm:justify-between">
-                            <div className="sm:flex">
-                              <p className="flex items-center text-sm text-gray-500">
-                                <MapPin className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" />
-                                {incident.location || 'Location not specified'}
-                              </p>
-                            </div>
-                            <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
-                              <ClockIcon className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" />
-                              <p>
-                                {new Date(incident.timestamp?.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="mt-2">
-                            <p className="text-sm text-gray-700 line-clamp-2">
-                              {incident.description}
-                            </p>
-                          </div>
-                          <div className="mt-3 flex items-center justify-between">
-                            <div className="flex items-center text-sm text-gray-500">
-                              {incident.anonymous ? (
-                                <span className="inline-flex items-center text-xs">
-                                  <span className="h-2 w-2 rounded-full bg-gray-400 mr-1"></span>
-                                  Anonymous Report
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center text-xs">
-                                  <span className="h-2 w-2 rounded-full bg-green-400 mr-1"></span>
-                                  You reported this
-                                </span>
-                              )}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => navigate(`/report/${incident.id}`)}
-                              className="text-sm font-medium text-indigo-600 hover:text-indigo-500 flex items-center"
-                            >
-                              View details
-                              <ChevronRight className="ml-1 h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
+              <div className="space-y-3 pb-20">
+                {incidents.map((incident) => {
+                  const TypeIcon = incidentTypes.find(t => t.id === incident.type)?.icon || FileText;
+                  return (
+                    <div 
+                      key={incident.id}
+                      onClick={() => navigate(`/report/${incident.id}`)}
+                      className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4 active:bg-gray-50 transition-colors cursor-pointer"
+                    >
+                      <div className={`p-3 rounded-full ${incident.type === 'accident' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
+                        <TypeIcon className="h-5 w-5" />
                       </div>
-                    </li>
-                  ))}
-                </ul>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start">
+                          <h4 className="font-bold text-gray-900 truncate">
+                            {incident.title || incident.type?.toUpperCase() || 'INCIDENT'}
+                          </h4>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase font-bold ${
+                            incident.severity === 'high' ? 'bg-red-100 text-red-700' : 
+                            incident.severity === 'low' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {incident.severity || 'Medium'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {incident.date} • {incident.time}
+                        </p>
+                        <p className="text-sm text-gray-600 mt-1 line-clamp-1">
+                          {incident.description}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-gray-300" />
+                    </div>
+                  );
+                })}
               </div>
             )}
-          </>
+          </div>
         )}
-      </main>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex justify-between">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="flex flex-col items-center justify-center py-3 px-4 text-gray-500 hover:text-indigo-600"
-            >
-              <svg
-                className="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
+        {/* --- VIEW 2: VOICE RECORDER --- */}
+        {activeTab === 'voice' && (
+          <div className="flex flex-col items-center justify-center h-[70vh]">
+            <h2 className="text-xl font-bold text-gray-800 mb-8">
+              {audioBlob ? "Ready to Submit" : isRecording ? "Recording..." : "Voice Report"}
+            </h2>
+
+            {/* Recorder Circle */}
+            <div className="relative mb-8">
+              {isRecording && (
+                <div className="absolute inset-0 bg-red-500 rounded-full animate-ping opacity-20"></div>
+              )}
+              <button
+                onClick={isRecording ? stopRecording : audioBlob ? null : startRecording}
+                className={`w-32 h-32 rounded-full flex items-center justify-center shadow-2xl transition-all ${
+                  isRecording 
+                    ? 'bg-red-600 text-white scale-110' 
+                    : audioBlob 
+                    ? 'bg-green-100 text-green-600'
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                }`}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                />
-              </svg>
-              <span className="text-xs mt-1">Home</span>
-            </button>
-            <button
-              onClick={() => navigate('/map')}
-              className="flex flex-col items-center justify-center py-3 px-4 text-gray-500 hover:text-indigo-600"
+                {isRecording ? <Square className="h-12 w-12 fill-current" /> : 
+                 audioBlob ? <FileText className="h-12 w-12" /> :
+                 <Mic className="h-12 w-12" />}
+              </button>
+            </div>
+
+            {/* Timer / Status */}
+            <div className="text-2xl font-mono font-bold text-gray-700 mb-8">
+              {formatTime(recordingDuration)}
+            </div>
+
+            {/* Controls */}
+            {audioBlob ? (
+              <div className="w-full max-w-xs space-y-3">
+                <button
+                  onClick={handleVoiceSubmit}
+                  disabled={loading}
+                  className="w-full bg-green-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2"
+                >
+                  {loading ? <Loader2 className="animate-spin" /> : <Send className="h-5 w-5" />}
+                  {loading ? "Analyzing..." : "Submit Report"}
+                </button>
+                <button
+                  onClick={resetAudio}
+                  disabled={loading}
+                  className="w-full bg-gray-100 text-gray-600 py-3 rounded-xl font-semibold"
+                >
+                  Discard & Retry
+                </button>
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center max-w-xs">
+                {isRecording 
+                  ? "Describe the incident clearly. Mention location, vehicles, and injuries." 
+                  : "Tap the microphone to start recording."}
+              </p>
+            )}
+
+            <button 
+              onClick={() => { resetAudio(); setIsRecording(false); setActiveTab('list'); }}
+              className="mt-12 text-gray-400 hover:text-gray-600"
             >
-              <MapPin className="h-6 w-6" />
-              <span className="text-xs mt-1">Map</span>
-            </button>
-            <button
-              onClick={() => navigate('/sos')}
-              className="flex flex-col items-center justify-center py-3 px-4 text-gray-500 hover:text-indigo-600"
-            >
-              <AlertTriangle className="h-6 w-6" />
-              <span className="text-xs mt-1">SOS</span>
-            </button>
-            <button
-              className="flex flex-col items-center justify-center py-3 px-4 text-indigo-600"
-              disabled
-            >
-              <AlertCircle className="h-6 w-6" />
-              <span className="text-xs mt-1">Incidents</span>
+              Cancel
             </button>
           </div>
-        </div>
-      </nav>
+        )}
+
+        {/* --- VIEW 3: MANUAL FORM --- */}
+        {activeTab === 'manual' && (
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg font-bold">Manual Entry</h2>
+              <button onClick={() => setActiveTab('list')}><X className="h-5 w-5 text-gray-400" /></button>
+            </div>
+
+            <form onSubmit={handleManualSubmit} className="space-y-5">
+              {/* Type Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {incidentTypes.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setFormData({...formData, type: t.id})}
+                      className={`p-3 rounded-lg flex flex-col items-center gap-1 border transition-all ${
+                        formData.type === t.id 
+                          ? `${t.bg} border-${t.color.split('-')[1]}-500` 
+                          : 'bg-white border-gray-200 text-gray-500'
+                      }`}
+                    >
+                      <t.icon className={`h-6 w-6 ${formData.type === t.id ? t.color : 'text-gray-400'}`} />
+                      <span className={`text-xs font-bold ${formData.type === t.id ? 'text-gray-900' : ''}`}>
+                        {t.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  rows={4}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="What happened?"
+                  value={formData.description}
+                  onChange={e => setFormData({...formData, description: e.target.value})}
+                />
+              </div>
+
+              {/* Anonymous Toggle */}
+              <div className="flex items-center gap-2">
+                <input 
+                  type="checkbox" 
+                  id="anon"
+                  checked={formData.anonymous}
+                  onChange={e => setFormData({...formData, anonymous: e.target.checked})}
+                  className="rounded text-indigo-600 focus:ring-indigo-500"
+                />
+                <label htmlFor="anon" className="text-sm text-gray-700">Submit Anonymously</label>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-md hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {loading ? 'Saving...' : 'Submit Report'}
+              </button>
+            </form>
+          </div>
+        )}
+
+      </main>
     </div>
   );
 }
