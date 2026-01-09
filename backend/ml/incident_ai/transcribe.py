@@ -14,63 +14,102 @@ genai.configure(api_key=api_key)
 
 def process_incident_audio(audio_path):
     """
-    Sends audio to Gemini 1.5 Flash to get BOTH transcription and classification.
+    Sends audio to Gemini 1.5 Flash to get Transcription, Classification, and UI Metadata.
     """
     print(f'🚀 Uploading {audio_path} to Gemini...')
 
-    myfile = genai.upload_file(audio_path)
-    print(f'✅ Upload complete: {myfile.name}')
+    try:
+        myfile = genai.upload_file(audio_path)
+        print(f'✅ Upload complete: {myfile.name}')
+    except Exception as e:
+        print(f"❌ Upload failed: {e}")
+        return {
+            "transcription": "Error uploading file.",
+            "category": "Other",
+            "title": "Upload Error",
+            "severity": "low",
+            "summary": "File upload failed."
+        }
 
+    # Using 1.5 Flash as it is faster and cheaper for this task
     model = genai.GenerativeModel('gemini-flash-latest')
 
-    # Updated Prompt with your specific categories
+    # --- UPDATED PROMPT ---
+    # Now requests Title, Severity, and Summary for the UI
     prompt = """
-    You are an incident reporting assistant. Listen to this audio recording of a user describing an incident.
+    You are an incident reporting assistant for 'GigGuard'. 
+    Listen to this audio recording of a user describing an incident.
     The audio may be in English or Indian regional languages.
     
-    Perform two tasks:
-    1. TRANSCRIPTION: Transcribe the audio into clear, fluent English. If the audio is in a different language, translate it accurately to English.
+    Perform three tasks:
+    1. TRANSCRIPTION: Transcribe the audio into clear, fluent English. If in a different language, translate accurately.
     
-    2. CLASSIFICATION: Based on the transcribed details, classify the incident into exactly one of these categories:
-       - "Accident" (Vehicle collisions, falls, physical injuries, fire accidents)
-       - "Medical" (Heart attacks, fainting, sudden illness not caused by external force/accident)
-       - "Theft" (Robbery, burglary, pickpocketing, stolen items)
-       - "Harassment" (Stalking, verbal abuse, physical threats, bullying)
-       - "Other" (Any other situation, irrelevant audio, or unclear context)
+    2. CLASSIFICATION: Classify the incident into exactly one of these categories:
+       - "Accident" (Vehicle collisions, falls, physical injuries, fire)
+       - "Medical" (Heart attacks, fainting, sudden illness)
+       - "Theft" (Robbery, burglary, pickpocketing)
+       - "Harassment" (Stalking, verbal abuse, threats)
+       - "Other" (Unclear context or irrelevant)
 
-    Output a JSON object with this exact schema:
+    3. METADATA GENERATION: 
+       - Title: A short 3-5 word title for a dashboard card (e.g., 'Minor Bike Collision').
+       - Severity: 'low', 'medium', or 'high' based on urgency and impact.
+       - Summary: A single short sentence (max 12 words) for the subtitle.
+
+    Output a valid JSON object with this EXACT schema:
     {
-        "transcription": "The full English text of what the user said...",
-        "category": "Accident" or "Medical" or "Theft" or "Harassment" or "Other"
+        "transcription": "The full English text...",
+        "category": "Accident" or "Medical" or "Theft" or "Harassment" or "Other",
+        "title": "Short Title Here",
+        "severity": "low" or "medium" or "high",
+        "summary": "Short summary here."
     }
     """
     
-    print('🤖 Processing audio (Transcribing + Classifying)...')
+    print('🤖 Processing audio (Transcribing + Metadata)...')
     
-    result = model.generate_content(
-        [myfile, prompt],
-        generation_config={"response_mime_type": "application/json"}
-    )
-
-    # Parse JSON result
     try:
+        result = model.generate_content(
+            [myfile, prompt],
+            generation_config={"response_mime_type": "application/json"}
+        )
+
+        # Parse JSON result
         data = json.loads(result.text)
         return data
+
     except json.JSONDecodeError:
-        # Fallback in case something goes wrong with the JSON generation
-        print("Error parsing JSON response.")
-        return {"transcription": result.text, "category": "Other"}
+        print("❌ Error: AI returned invalid JSON.")
+        return {
+            "transcription": result.text if result else "No text generated",
+            "category": "Other", 
+            "title": "Processing Error",
+            "severity": "medium",
+            "summary": "AI output format error."
+        }
+    except Exception as e:
+        print(f"❌ GenAI Error: {e}")
+        return {
+            "transcription": "System error during analysis.",
+            "category": "Other",
+            "title": "System Error",
+            "severity": "low",
+            "summary": "An internal error occurred."
+        }
 
 # Test Block
 if __name__ == '__main__':
-    test_file = os.path.join('backend', 'ml', 'incident_ai', 'test_audio2.m4a')
+    # Adjust path if needed for your local test
+    test_file = os.path.join('backend', 'ml', 'incident_ai', 'test_audio.m4a')
 
     if os.path.exists(test_file):
         print("\n--- RESULT ---")
         result_data = process_incident_audio(test_file)
         
-        print(f"📂 Category: {result_data['category']}")
-        print(f"📝 Text: {result_data['transcription']}")
+        print(f"📂 Category: {result_data.get('category')}")
+        print(f"🏷️  Title:    {result_data.get('title')}")
+        print(f"⚠️  Severity: {result_data.get('severity')}")
+        print(f"📝 Text:      {result_data.get('transcription')[:60]}...")
         print("--------------")
     else:
         print(f"❌ Error: Could not find '{test_file}'.")
