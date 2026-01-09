@@ -149,12 +149,12 @@ Important rule:
 
 ---
 
-## 4. End-to-End User Flows
+## 4. End-to-End User Flows (some flows below)
 
 ### 4.1 Flow A — Pre-Shift Risk Awareness (Prevention)
 
 1. Worker opens the web app
-2. Worker enters workload details
+2. Auto fetches workload details
 3. Frontend sends data to backend
 4. Backend calls workload ML service
 5. ML service returns risk estimate
