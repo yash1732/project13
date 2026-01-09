@@ -14,7 +14,7 @@ class RouteRiskRequest(BaseModel):
 class RouteRiskResponse(BaseModel):
     risk_label: str
     risk_probabilities: dict[str, float]
-    reasons: list
+    reasons: list[str]
 
 
 # --- Fatigue Schemas ---

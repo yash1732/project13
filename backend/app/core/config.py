@@ -16,8 +16,8 @@ class Settings:
     ROUTE_SCALER_PATH = ML_DIR / "route_risk" / "artifacts" / "scaler.pkl" # If exists in V2
     
     # Fatigue Model Paths
-    FATIGUE_MODEL_PATH = ML_DIR / "fatigue" / "artifacts" / "model.pkl"
-    FATIGUE_SCALER_PATH = ML_DIR / "fatigue" / "artifacts" / "scaler.pkl"
+    FATIGUE_MODEL_PATH = ML_DIR / "fatigue_model" / "artifacts" / "model.pkl"
+    FATIGUE_SCALER_PATH = ML_DIR / "fatigue_model" / "artifacts" / "scaler.pkl"
     
     # Incident Data Path
     DB_PATH = BASE_DIR / "backend" / "app" / "data" / "incidents.json"
