@@ -26,7 +26,7 @@ def predict_workload_risk(input_data: dict):
         input_data["night_work_fraction"],
         input_data["weather_stress_index"],
         input_data["self_reported_tiredness"]
-    ]])
+    ]]) # type: ignore
 
     features_scaled = scaler.transform(features)
 
