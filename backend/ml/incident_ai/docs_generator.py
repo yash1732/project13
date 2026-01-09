@@ -3,7 +3,7 @@ from docx.shared import Pt, RGBColor, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from datetime import datetime
 
-def create_word_report(json_data, filename="Incident_Memory_Log.docx"):
+def create_word_report(json_data, filename=None):
     doc = Document()
     
     # --- 1. TITLE & HEADER ---
@@ -18,29 +18,33 @@ def create_word_report(json_data, filename="Incident_Memory_Log.docx"):
     doc.add_paragraph("_" * 70) # Horizontal Line effect
 
     # --- 2. METADATA ---
+    # Safely handle missing keys with .get()
+    meta = json_data.get('meta', {})
     p = doc.add_paragraph()
     p.add_run("Report Type: ").bold = True
-    p.add_run(f"{json_data['meta']['report_type']}\n")
+    p.add_run(f"{meta.get('report_type', 'Standard Report')}\n")
     p.add_run("Reference ID: ").bold = True
-    p.add_run(f"{json_data['meta'].get('report_id', 'N/A')}")
+    p.add_run(f"{meta.get('report_id', 'N/A')}")
 
     # --- 3. CLASSIFICATION & SEVERITY ---
     doc.add_heading('1. Classification', level=1)
     
+    classification = json_data.get('classification', {})
+    severity_level = classification.get('severity_level', 'Medium')
+
     # Create a visual "Badge" for severity using text color
     severity_paragraph = doc.add_paragraph()
     run_label = severity_paragraph.add_run("SEVERITY LEVEL: ")
     run_label.bold = True
     
-    run_sev = severity_paragraph.add_run(json_data['classification']['severity_level'].upper())
+    run_sev = severity_paragraph.add_run(severity_level.upper())
     run_sev.bold = True
     run_sev.font.size = Pt(14)
     
     # Set Color based on level
-    sev_text = json_data['classification']['severity_level']
-    if sev_text in ["High", "Critical"]:
+    if severity_level in ["High", "Critical"]:
         run_sev.font.color.rgb = RGBColor(220, 0, 0) # Red
-    elif sev_text == "Medium":
+    elif severity_level == "Medium":
         run_sev.font.color.rgb = RGBColor(255, 140, 0) # Orange
     else:
         run_sev.font.color.rgb = RGBColor(0, 150, 0) # Green
@@ -48,18 +52,20 @@ def create_word_report(json_data, filename="Incident_Memory_Log.docx"):
     # Tags
     p = doc.add_paragraph()
     p.add_run("Category: ").bold = True
-    p.add_run(f"{json_data['classification']['primary_category']}\n")
+    p.add_run(f"{classification.get('primary_category', 'Uncategorized')}\n")
     p.add_run("Keywords: ").bold = True
-    p.add_run(", ".join(json_data['classification']['keywords']))
+    keywords = classification.get('keywords', [])
+    p.add_run(", ".join(keywords) if keywords else "None")
 
     # --- 4. NARRATIVE (Standard Paragraph) ---
     doc.add_heading('2. Incident Narrative', level=1)
-    doc.add_paragraph(json_data['narrative']['objective_summary'])
+    narrative = json_data.get('narrative', {})
+    doc.add_paragraph(narrative.get('objective_summary', 'No summary available.'))
 
     # --- 5. TIMELINE (Using a Table for Clean Layout) ---
     doc.add_heading('3. Chronological Timeline', level=1)
     
-    timeline_data = json_data['narrative']['chronological_timeline']
+    timeline_data = narrative.get('chronological_timeline', [])
     if timeline_data:
         table = doc.add_table(rows=1, cols=2)
         table.style = 'Light List Accent 1' # Professional Word Table Style
@@ -72,14 +78,14 @@ def create_word_report(json_data, filename="Incident_Memory_Log.docx"):
         # Fill Rows
         for event in timeline_data:
             row_cells = table.add_row().cells
-            row_cells[0].text = event['time_reference']
-            row_cells[1].text = event['event']
+            row_cells[0].text = event.get('time_reference', '-')
+            row_cells[1].text = event.get('event', '-')
     else:
         doc.add_paragraph("No timeline events detected.")
 
     # --- 6. ENTITIES (Bullet Points) ---
     doc.add_heading('4. Identified Entities', level=1)
-    entities = json_data['entities']
+    entities = json_data.get('entities', {})
     
     def add_entity_section(label, items):
         p = doc.add_paragraph()
@@ -96,6 +102,8 @@ def create_word_report(json_data, filename="Incident_Memory_Log.docx"):
     # --- 7. LOCATION CONTEXT (Table) ---
     doc.add_heading('5. Location Verification', level=1)
     
+    location_context = json_data.get('location_context', {})
+    
     loc_table = doc.add_table(rows=2, cols=2)
     loc_table.style = 'Table Grid'
     
@@ -103,13 +111,13 @@ def create_word_report(json_data, filename="Incident_Memory_Log.docx"):
     row1 = loc_table.rows[0].cells
     row1[0].text = "System Recorded GPS:"
     row1[0].paragraphs[0].runs[0].bold = True
-    row1[1].text = json_data['location_context']['system_recorded_gps']
+    row1[1].text = location_context.get('system_recorded_gps', 'N/A')
     
     # Row 2: Voice Mention
     row2 = loc_table.rows[1].cells
     row2[0].text = "Mentioned in Audio:"
     row2[0].paragraphs[0].runs[0].bold = True
-    row2[1].text = json_data['location_context'].get('transcript_mentioned_location', 'N/A')
+    row2[1].text = location_context.get('transcript_mentioned_location', 'N/A')
 
     # --- 8. DISCLAIMER ---
     doc.add_paragraph("\n")
@@ -117,40 +125,11 @@ def create_word_report(json_data, filename="Incident_Memory_Log.docx"):
     disclaimer.style = "Quote" 
     disclaimer.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    # Save
-    doc.save(filename)
-    print(f"Word Document generated successfully: {filename}")
-
-# --- TEST ---
-if __name__ == "__main__":
-    dummy_data = {
-      "meta": {
-        "report_type": "GigGuard Incident Archive",
-        "report_id": "INC-2025-X89",
-        "generated_at": "2025-12-29 03:20:00"
-      },
-      "classification": {
-        "primary_category": "Verbal Harassment",
-        "severity_level": "Medium",
-        "keywords": ["Argument", "Route Dispute", "Passenger"]
-      },
-      "narrative": {
-        "objective_summary": "User reports a verbal altercation regarding drop-off location. Passenger became aggressive when denied an illegal turn.",
-        "chronological_timeline": [
-          { "time_reference": "Start of Ride", "event": "Picked up passenger at Main St." },
-          { "time_reference": "10 Mins In", "event": "Argument ensued over route selection." },
-          { "time_reference": "End of Ride", "event": "Passenger slammed door upon exit." }
-        ]
-      },
-      "entities": {
-        "people_involved": ["Driver", "Passenger"],
-        "vehicles": ["Silver Sedan"],
-        "injuries_or_damages": []
-      },
-      "location_context": {
-        "system_recorded_gps": "28.97, 79.41",
-        "transcript_mentioned_location": "Main St"
-      }
-    }
-
-    create_word_report(dummy_data)
+    # --- CRITICAL CHANGE FOR STORAGE INTEGRATION ---
+    # Only save if a filename is strictly provided (for testing).
+    # Otherwise, return the doc object so storage.py can save it in the user folder.
+    if filename:
+        doc.save(filename)
+        print(f"Word Document saved locally as: {filename}")
+        
+    return doc
