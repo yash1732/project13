@@ -33,6 +33,13 @@ async def create_incident_report(
 
         return result
     except Exception as e:
+        # --- NEW: PRINT THE ERROR ---
+        import traceback
+        print("\n❌ CRITICAL API CRASH:")
+        traceback.print_exc()  # This prints the full error details to your terminal
+        print(f"Error Message: {str(e)}\n")
+        # ----------------------------
+
         if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
             os.remove(temp_file_path)
         raise HTTPException(status_code=500, detail=str(e))

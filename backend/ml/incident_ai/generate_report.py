@@ -16,91 +16,56 @@ else:
 
 def generate_incident_json(transcription, category, location, time):
     if not model:
-        print("❌ Error: AI Model not loaded (Missing API Key).")
-        return {
-            "meta": {"report_type": "Error", "generated_at": time},
-            "classification": {"primary_category": category, "severity_level": "Medium"},
-            "narrative": {"objective_summary": transcription, "chronological_timeline": []},
-            "entities": {},
-            "location_context": {"system_recorded_gps": location}
-        }
+        return create_fallback_data(transcription, category, location, time, "AI Model Not Configured")
 
-    """
-    Sends all data to Gemini to write the final report.
-    """
-    # ... rest of your code ...
     prompt = f"""
-        You are the "GigGuard" Incident Documentation AI.
-        Your sole purpose is to create a neutral, structured archive of an incident based on user testimony.
-
-    --- SYSTEM INPUTS ---
-    SYSTEM_TIME: {time}
-    GPS_COORDS: {location}
-    USER_SELECTED_CATEGORY: {category}
-    ---------------------
-
-    --- USER AUDIO TRANSCRIPT ---
-    <transcript>
-    "{transcription}"
-    </transcript>
-    -----------------------------
-
-    --- ANALYST INSTRUCTIONS ---
-    1. **Neutrality Protocol**: You are a Scribe, not a Judge. Always use attribution verbs like "User states," "User claims," or "User reports." Do not present user claims as objective facts.
-    2. **Entity Extraction**: Identify specific details (Vehicles, Injuries, Weapons, Items) strictly from the text.
-    3. **Timeline Construction**: Reconstruct the sequence of events chronologically based on the user's narration.
-    4. **Severity Tagging**:
-        - "Low": Property damage only / Non-urgent dispute.
-        - "Medium": Verbal aggression / Minor injury.
-        - "High": Physical threat / Significant injury.
-        - "Critical": Life-threatening situation.
-
-    5. **Output Constraint**: Return ONLY raw JSON. Do not include markdown formatting (like ```json).
-
-    --- REQUIRED JSON STRUCTURE ---
+    Analyze this audio transcript and return a JSON object.
+    
+    CONTEXT:
+    - Incident Type: {category}
+    - Audio Transcript: "{transcription}"
+    
+    OUTPUT FORMAT (JSON ONLY):
     {{
-    "meta": {{
-        "report_type": "GigGuard Incident Archive",
-        "generated_at": "{time}" 
-    }},
-    "classification": {{
-        "primary_category": "Select best fit (e.g., Traffic Accident, Harassment)",
-        "severity_level": "Low/Medium/High/Critical",
-        "keywords": ["List", "of", "relevant", "tags"]
-    }},
-    "narrative": {{
-        "objective_summary": "A 3-sentence summary using neutral language (e.g., 'User reports...').",
-        "chronological_timeline": [
-        {{ "time_reference": "e.g., '10 mins ago' or 'At the start'", "event": "Event description" }}
-        ]
-    }},
-    "entities": {{
-        "people_involved": ["Driver", "Passenger", "Police", etc. (or empty)],
-        "vehicles": ["Silver Sedan", "Bike" (or empty)],
-        "injuries_or_damages": ["Scraped knee", "Broken headlight" (or empty)]
-    }},
-    "location_context": {{
-        "system_recorded_gps": "{location}",
-        "transcript_mentioned_location": "Extract specific location text from audio or null"
-    }}
+      "meta": {{ "report_id": "INC_123", "report_type": "Automated Field Report" }},
+      "title": "Short Title",
+      "summary": "One sentence summary",
+      "severity": "Medium",
+      "category": "{category}",
+      "time": "{time}",
+      "narrative": {{
+        "objective_summary": "Full paragraph description...",
+        "chronological_timeline": ["Event 1", "Event 2"]
+      }},
+      "entities": {{
+        "vehicles": [],
+        "people": []
+      }},
+      "location_context": {{
+        "transcript_mentioned_location": "Extract location from text or N/A"
+      }}
     }}
     """
 
-    print("🧠 AI is extracting structured data...")
-    response = model.generate_content(prompt)
-
-
-    # Clean up response just in case (remove backticks if Gemini adds them)
-    clean_json = response.text.strip().replace("```json", "").replace("```", "")
-    
     try:
-        # Verify it's valid JSON by parsing it
-        data = json.loads(clean_json)
+        response = model.generate_content(prompt)
+        clean_text = response.text.replace("```json", "").replace("```", "").strip()
+        data = json.loads(clean_text)
+
+        # --- CRITICAL GPS FIX ---
+        # We FORCE the real GPS data here. We do not trust the AI to echo it back.
+        if "location_context" not in data:
+            data["location_context"] = {}
+        
+        # Overwrite with the actual string passed from Frontend
+        data["location_context"]["system_recorded_gps"] = str(location) 
+        # ------------------------
+
         return data
-    except json.JSONDecodeError:
-        print("❌ Error: AI did not return valid JSON.")
-        return None
-    
+
+    except Exception as e:
+        print(f"❌ AI Error: {e}")
+        return create_fallback_data(transcription, category, location, time, str(e))
 
 
 # --- TEST BLOCK ---
