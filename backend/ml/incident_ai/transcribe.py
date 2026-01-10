@@ -1,19 +1,26 @@
 import os
 import google.generativeai as genai
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
 import json
 from dotenv import load_dotenv
 
 load_dotenv()
 api_key = os.getenv("GOOGLE_API_KEY")
 
-# --- FIX: Don't kill the server if key is missing ---
 if not api_key:
     print("⚠️ Warning: GOOGLE_API_KEY not found. AI features will fail, but Server is ON.")
 else:
     genai.configure(api_key=api_key)
 
+# --- SAFETY SETTINGS ---
+safety_settings = {
+    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+}
+
 def process_incident_audio(audio_path):
-    # Safety check inside the function too
     if not api_key:
         return {
             "transcription": "System Error: No Google API Key configured.",
@@ -23,9 +30,6 @@ def process_incident_audio(audio_path):
             "summary": "Please set up your API key."
         }
         
-    """
-    Sends audio to Gemini 1.5 Flash to get Transcription, Classification, and UI Metadata.
-    """
     print(f'🚀 Uploading {audio_path} to Gemini...')
 
     try:
@@ -41,11 +45,8 @@ def process_incident_audio(audio_path):
             "summary": "File upload failed."
         }
 
-    # Using 1.5 Flash as it is faster and cheaper for this task
     model = genai.GenerativeModel('gemini-flash-latest')
 
-    # --- UPDATED PROMPT ---
-    # Now requests Title, Severity, and Summary for the UI
     prompt = """
     You are an incident reporting assistant for 'GigGuard'. 
     Listen to this audio recording of a user describing an incident.
@@ -79,12 +80,13 @@ def process_incident_audio(audio_path):
     print('🤖 Processing audio (Transcribing + Metadata)...')
     
     try:
+        # Added safety_settings here
         result = model.generate_content(
             [myfile, prompt],
-            generation_config={"response_mime_type": "application/json"}
+            generation_config={"response_mime_type": "application/json"},
+            safety_settings=safety_settings
         )
 
-        # Parse JSON result
         data = json.loads(result.text)
         return data
 
@@ -100,22 +102,18 @@ def process_incident_audio(audio_path):
     except Exception as e:
         print(f"❌ GenAI Error: {e}")
         return {
-            "transcription": "System error during analysis.",
+            "transcription": "System error during analysis (Check Safety/API).",
             "category": "Other",
             "title": "System Error",
             "severity": "low",
             "summary": "An internal error occurred."
         }
 
-# Test Block
 if __name__ == '__main__':
-    # Adjust path if needed for your local test
     test_file = os.path.join('backend', 'ml', 'incident_ai', 'test_audio.m4a')
-
     if os.path.exists(test_file):
         print("\n--- RESULT ---")
         result_data = process_incident_audio(test_file)
-        
         print(f"📂 Category: {result_data.get('category')}")
         print(f"🏷️  Title:    {result_data.get('title')}")
         print(f"⚠️  Severity: {result_data.get('severity')}")
