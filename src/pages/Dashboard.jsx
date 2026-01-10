@@ -1,225 +1,242 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { 
-  MapPin, 
+  Map, 
   AlertTriangle, 
-  Clock, 
-  Shield, 
   FileText, 
   LogOut,
+  Battery,
+  Zap,
+  Clock,
+  CloudRain,
+  Sun,
+  Cloud,
+  CloudLightning,
+  Snowflake,
+  Navigation,
   ChevronRight,
-  AlertCircle,
-  Map,
-  AlertOctagon,
-  FileCheck
+  ShieldAlert,
+  Loader
 } from 'lucide-react';
 
 function Dashboard() {
   const { currentUser, logout } = useAuth();
-  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // --- Weather State ---
+  const [weather, setWeather] = useState({ temp: '--', code: 0, loading: true });
+
+  // --- 1. Fetch Live Weather (Open-Meteo Free API) ---
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          const res = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`
+          );
+          const data = await res.json();
+          setWeather({
+            temp: Math.round(data.current_weather.temperature),
+            code: data.current_weather.weathercode,
+            loading: false
+          });
+        } catch (error) {
+          console.error("Weather fetch failed", error);
+          setWeather(prev => ({ ...prev, loading: false }));
+        }
+      }, () => {
+        toast.error("Enable location for weather updates");
+        setWeather(prev => ({ ...prev, loading: false }));
+      });
+    }
+  }, []);
+
+  const getWeatherIcon = (code) => {
+    if (code >= 95) return CloudLightning; // Thunderstorm
+    if (code >= 71) return Snowflake;      // Snow
+    if (code >= 51) return CloudRain;      // Rain
+    if (code >= 1) return Cloud;           // Cloudy
+    return Sun;                            // Clear (0)
+  };
+
+  const WeatherIcon = getWeatherIcon(weather.code);
+
+  // --- Mock Data (To be connected later) ---
+  const fatigueData = {
+    score: 35, 
+    level: 'Low',
+    status: 'Good to Ride',
+    shiftDuration: '4h 12m'
+  };
 
   const handleLogout = async () => {
     try {
       setIsLoading(true);
       await logout();
-      toast.success('Logged out successfully');
       navigate('/');
     } catch (error) {
       toast.error('Failed to log out');
-      console.error(error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  // Mock data for quick stats
-  const quickStats = [
-    { name: 'Active Shifts', value: '1', icon: Clock, color: 'text-blue-500 bg-blue-100' },
-    { name: 'Incidents Logged', value: '0', icon: AlertTriangle, color: 'text-amber-500 bg-amber-100' },
-    { name: 'Safe Zones', value: '3', icon: Shield, color: 'text-green-500 bg-green-100' },
-  ];
-
-  // Quick actions
-  const quickActions = [
-    {
-      title: 'Check Route Safety',
-      description: 'Analyze your route for potential risks',
-      icon: Map,
-      color: 'text-indigo-600 bg-indigo-100',
-      path: '/map'
-    },
-    {
-      title: 'Log Incident',
-      description: 'Report safety concerns or incidents',
-      icon: AlertOctagon,
-      color: 'text-red-600 bg-red-100',
-      path: '/incident'
-    },
-    {
-      title: 'View Reports',
-      description: 'Access your incident history',
-      icon: FileCheck,
-      color: 'text-purple-600 bg-purple-100',
-      path: '/incident'
-    },
-  ];
+  const getFatigueColor = (level) => {
+    if (level === 'High') return 'bg-red-500 text-red-50';
+    if (level === 'Medium') return 'bg-amber-500 text-amber-50';
+    return 'bg-emerald-500 text-emerald-50';
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 pb-28 select-none">
+      
       {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              Welcome, {currentUser?.email?.split('@')[0] || 'Rider'}
-            </h1>
-            <p className="text-sm text-gray-500">Stay safe on the road</p>
-          </div>
-          <button
-            onClick={handleLogout}
-            disabled={isLoading}
-            className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-red-600 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-          >
-            <LogOut className="h-4 w-4 mr-1" />
-            {isLoading ? 'Signing out...' : 'Sign out'}
-          </button>
+      <header className="bg-white px-6 py-5 flex justify-between items-center shadow-sm sticky top-0 z-10">
+        <div>
+          <h1 className="text-xl font-bold text-gray-800">
+            Hi, {currentUser?.email?.split('@')[0] || 'Rider'}
+          </h1>
+          <p className="text-xs text-gray-400">Ride Safe • {new Date().toLocaleDateString()}</p>
         </div>
+        <button
+          onClick={handleLogout}
+          className="p-2 bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200 transition-colors"
+        >
+          <LogOut className="w-5 h-5" />
+        </button>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 mb-8">
-          {quickStats.map((stat) => (
-            <div key={stat.name} className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className={`flex-shrink-0 rounded-md p-3 ${stat.color}`}>
-                    <stat.icon className="h-6 w-6" aria-hidden="true" />
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">{stat.name}</dt>
-                      <dd className="flex items-baseline">
-                        <div className="text-2xl font-semibold text-gray-900">{stat.value}</div>
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+      <main className="px-5 py-6 space-y-6">
 
-        {/* Quick Actions */}
-        <div className="mb-8">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h2>
-          <div className="bg-white shadow overflow-hidden sm:rounded-md">
-            <ul className="divide-y divide-gray-200">
-              {quickActions.map((action, index) => (
-                <li key={index}>
-                  <Link
-                    to={action.path}
-                    className="block hover:bg-gray-50"
-                  >
-                    <div className="flex items-center px-4 py-4 sm:px-6">
-                      <div className={`flex-shrink-0 rounded-md p-3 ${action.color}`}>
-                        <action.icon className="h-6 w-6" aria-hidden="true" />
-                      </div>
-                      <div className="min-w-0 flex-1 flex items-center justify-between">
-                        <div className="truncate">
-                          <div className="flex text-sm">
-                            <p className="font-medium text-indigo-600 truncate">{action.title}</p>
-                          </div>
-                          <p className="mt-1 text-sm text-gray-500 truncate">{action.description}</p>
-                        </div>
-                        <div className="ml-5 flex-shrink-0">
-                          <ChevronRight className="h-5 w-5 text-gray-400" aria-hidden="true" />
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+        {/* --- Context Widget (Live Weather & Shift) --- */}
+        <div className="flex space-x-3">
+          {/* Weather Card */}
+          <div className="flex-1 bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-3">
+            <div className={`p-2 rounded-xl ${weather.loading ? 'bg-gray-100' : 'bg-blue-50 text-blue-600'}`}>
+              {weather.loading ? <Loader className="w-5 h-5 animate-spin text-gray-400"/> : <WeatherIcon className="w-5 h-5" />}
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 font-medium">Weather</p>
+              <p className="text-sm font-bold text-gray-700">
+                {weather.loading ? '--' : `${weather.temp}°C`}
+              </p>
+            </div>
+          </div>
+          
+          {/* Shift Timer Card */}
+          <div className="flex-1 bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-3">
+            <div className="p-2 bg-purple-50 text-purple-600 rounded-xl">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 font-medium">On Shift</p>
+              <p className="text-sm font-bold text-gray-700">{fatigueData.shiftDuration}</p>
+            </div>
           </div>
         </div>
 
-        {/* Emergency Section */}
-        <div className="bg-white shadow overflow-hidden rounded-lg mb-8">
-          <div className="px-4 py-5 sm:p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0 bg-red-500 rounded-md p-3">
-                <AlertCircle className="h-6 w-6 text-white" />
+        {/* --- Fatigue Monitor (Visual Hero) --- */}
+        <div className={`rounded-3xl p-6 shadow-lg relative overflow-hidden transition-all ${getFatigueColor(fatigueData.level)}`}>
+          <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full blur-xl"></div>
+          
+          <div className="relative z-10">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h2 className="text-lg font-bold opacity-90">Rider Energy</h2>
+                <p className="text-sm opacity-75">Fatigue Risk Monitor</p>
               </div>
-              <div className="ml-4">
-                <h3 className="text-lg leading-6 font-medium text-gray-900">Emergency Assistance</h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  Immediate help when you need it most
+              <Battery className="w-8 h-8 opacity-80" />
+            </div>
+
+            <div className="w-full bg-black/10 h-3 rounded-full mb-3 overflow-hidden">
+              <div 
+                className="h-full bg-white opacity-90 rounded-full transition-all duration-1000" 
+                style={{ width: `${100 - fatigueData.score}%` }}
+              ></div>
+            </div>
+
+            <div className="flex justify-between items-end">
+              <div>
+                <span className="text-3xl font-bold">{fatigueData.level}</span>
+                <span className="text-sm ml-1 opacity-75">Risk</span>
+              </div>
+              <div className="text-right">
+                <p className="font-medium text-sm bg-white/20 px-3 py-1 rounded-lg backdrop-blur-sm">
+                  {fatigueData.status}
                 </p>
               </div>
             </div>
-            <div className="mt-5">
-              <Link
-                to="/sos"
-                className="inline-flex items-center justify-center px-4 py-3 border border-transparent font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 w-full"
-              >
-                <AlertCircle className="h-5 w-5 mr-2" />
-                Emergency SOS
-              </Link>
-            </div>
           </div>
         </div>
+
+        {/* --- Primary Action: Route Planner --- */}
+        <Link to="/map" className="block group">
+          <div className="bg-indigo-600 rounded-2xl p-5 shadow-lg shadow-indigo-200 text-white flex items-center justify-between transform transition-transform active:scale-[0.98]">
+            <div className="flex items-center space-x-4">
+              <div className="p-3 bg-white/10 rounded-xl">
+                <Navigation className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg">Check Route Safety</h3>
+                <p className="text-indigo-100 text-xs">Analyze risks before you ride</p>
+              </div>
+            </div>
+            <ChevronRight className="w-6 h-6 text-indigo-200 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </Link>
+
+        {/* --- Secondary Actions Grid --- */}
+        <div className="grid grid-cols-2 gap-4">
+          <Link to="/incident" className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 active:bg-gray-50 transition-colors">
+            <div className="w-10 h-10 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center mb-3">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <h3 className="font-bold text-gray-700">Log Incident</h3>
+            <p className="text-xs text-gray-400 mt-1">Report accidents</p>
+          </Link>
+
+          <Link to="/incident" className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 active:bg-gray-50 transition-colors">
+            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-3">
+              <FileText className="w-5 h-5" />
+            </div>
+            <h3 className="font-bold text-gray-700">My Reports</h3>
+            <p className="text-xs text-gray-400 mt-1">View history</p>
+          </Link>
+        </div>
+
+        {/* --- SOS Button (Reverted to Button) --- */}
+        <div className="bg-red-50 rounded-2xl p-1 border border-red-100 mt-4">
+            <Link 
+                to="/sos"
+                className="flex items-center justify-center space-x-2 bg-red-600 text-white w-full py-4 rounded-xl shadow-lg shadow-red-200 active:bg-red-700 transition-colors"
+            >
+                <ShieldAlert className="w-6 h-6" />
+                <span className="font-bold tracking-wide">EMERGENCY SOS</span>
+            </Link>
+        </div>
+
       </main>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex justify-between">
-            <Link
-              to="/dashboard"
-              className="flex flex-col items-center justify-center py-3 px-4 text-indigo-600"
-            >
-              <svg
-                className="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                />
-              </svg>
-              <span className="text-xs mt-1">Home</span>
-            </Link>
-            <Link
-              to="/map"
-              className="flex flex-col items-center justify-center py-3 px-4 text-gray-500 hover:text-indigo-600"
-            >
-              <Map className="h-6 w-6" />
-              <span className="text-xs mt-1">Map</span>
-            </Link>
-            <Link
-              to="/sos"
-              className="flex flex-col items-center justify-center py-3 px-4 text-gray-500 hover:text-indigo-600"
-            >
-              <AlertTriangle className="h-6 w-6" />
-              <span className="text-xs mt-1">SOS</span>
-            </Link>
-            <Link
-              to="/incident"
-              className="flex flex-col items-center justify-center py-3 px-4 text-gray-500 hover:text-indigo-600"
-            >
-              <FileText className="h-6 w-6" />
-              <span className="text-xs mt-1">Incidents</span>
-            </Link>
-          </div>
-        </div>
+      {/* --- Bottom Navigation --- */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-6 py-3 flex justify-between items-center pb-safe z-50">
+        <Link to="/dashboard" className="flex flex-col items-center text-indigo-600">
+          <Zap className="w-6 h-6" />
+          <span className="text-[10px] font-medium mt-1">Home</span>
+        </Link>
+        <Link to="/map" className="flex flex-col items-center text-gray-400 hover:text-indigo-600 transition-colors">
+          <Map className="w-6 h-6" />
+          <span className="text-[10px] font-medium mt-1">Map</span>
+        </Link>
+        <Link to="/sos" className="flex flex-col items-center text-gray-400 hover:text-red-500 transition-colors">
+          <ShieldAlert className="w-6 h-6" />
+          <span className="text-[10px] font-medium mt-1">SOS</span>
+        </Link>
+        <Link to="/incident" className="flex flex-col items-center text-gray-400 hover:text-indigo-600 transition-colors">
+          <FileText className="w-6 h-6" />
+          <span className="text-[10px] font-medium mt-1">Logs</span>
+        </Link>
       </nav>
     </div>
   );
