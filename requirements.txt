@@ -1,0 +1,23 @@
+
+# --- Web Framework & API ---
+fastapi
+uvicorn
+pydantic
+python-multipart
+
+# --- Database & Config ---
+firebase-admin
+python-dotenv
+
+# --- Machine Learning (Core) ---
+numpy
+pandas
+scikit-learn
+joblib
+
+# --- Incident AI (Gemini & Reports) ---
+google-generativeai
+python-docx
+
+# --- Utilities ---
+requests
